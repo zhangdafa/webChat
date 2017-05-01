@@ -1,0 +1,122 @@
+#!/usr/bin/env node
+
+/**
+ * Module dependencies.
+ */
+
+var app = require('../app');
+var debug = require('debug')('webchat:server');
+var http = require('http');
+
+/**
+ * Get port from environment and store in Express.
+ */
+
+var port = normalizePort(process.env.PORT || '3000');
+app.set('port', port);
+
+/**
+ * Create HTTP server.
+ */
+
+var server = http.createServer(app);
+
+var io=require('socket.io')(server);
+//总成员列表
+var nameList=[];
+io.on('connection',function(socket){
+  // console.log('a user connected');
+  //每个连接的昵称与断开连接消息的声明
+  var name=null;
+  var userDisconnect=null;
+  //断开连接事件
+  socket.on('disconnect',function(){
+    socket.broadcast.emit('get message',userDisconnect);
+    nameList.splice(nameList.indexOf(name),1);
+    io.emit('get nameList',nameList);
+  });
+  //正常聊天消息的广播
+  socket.on('send message',function(msg){
+    io.emit('get message',msg);
+  });
+  //提示消息的广播包括对成员列表的广播
+  socket.on('send tip',function(msg){
+    //当前连接昵称
+    name=msg.name;
+    //当前断开连接信息
+    userDisconnect={name:name,message:'离开了会话',tip:'这是一个提示消息'};
+    //总成员列表
+    nameList.push(msg.name);
+    //消息广播（成员加入会话）
+    socket.broadcast.emit('get message',msg);
+    //成员列表广播
+    io.emit('get nameList',nameList);
+  });
+});
+/**
+ * Listen on provided port, on all network interfaces.
+ */
+
+server.listen(port);
+server.on('error', onError);
+server.on('listening', onListening);
+
+/**
+ * Normalize a port into a number, string, or false.
+ */
+
+function normalizePort(val) {
+  var port = parseInt(val, 10);
+
+  if (isNaN(port)) {
+    // named pipe
+    return val;
+  }
+
+  if (port >= 0) {
+    // port number
+    return port;
+  }
+
+  return false;
+}
+
+/**
+ * Event listener for HTTP server "error" event.
+ */
+
+function onError(error) {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  var bind = typeof port === 'string'
+    ? 'Pipe ' + port
+    : 'Port ' + port;
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case 'EACCES':
+      console.error(bind + ' requires elevated privileges');
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      console.error(bind + ' is already in use');
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+
+function onListening() {
+  var addr = server.address();
+  var bind = typeof addr === 'string'
+    ? 'pipe ' + addr
+    : 'port ' + addr.port;
+  debug('Listening on ' + bind);
+}
